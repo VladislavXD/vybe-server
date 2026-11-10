@@ -1,20 +1,31 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { AuthModule } from './auth/auth.module.js';
+import { UserModule } from './user/user.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { OrdersModule } from './orders/orders.module.js';
+import { DjsModule } from './djs/djs.module.js';
+import { TracksModule } from './tracks/tracks.module.js';
+import { MinioModule } from './minio/minio.module.js';
+import { RedisModule } from './redis/redis.module.js';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: process.env.OBSERVE_APP_KEY ?? '',
-      appSecret: process.env.OBSERVE_APP_SECRET ?? '',
-      runtimeMetrics: !Boolean(process.versions?.['webcontainer']),
-      serviceId: 'nest-typescript-starter',
+    ConfigModule.forRoot({
+      isGlobal: true,
     }),
+    MinioModule,
+    AuthModule,
+    UserModule,
+    PaymentsModule,
+    NotificationsModule,
+    OrdersModule,
+    DjsModule,
+    TracksModule,
+    RedisModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,0 +1,443 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============ ПОЛЬЗОВАТЕЛИ И АДМИНИСТРИРОВАНИЕ ============
+
+enum UserRole {
+  ADMIN
+  VENUE_OWNER
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String?    @unique
+  password           String?
+  name               String?
+  fullName           String?
+  avatarUrl          String?
+  isTwoFactorEnabled Boolean    @default(false)
+  bio                String?
+  status             String?    @default("Hey there! I'm using TrackUp.")
+  username           String?    @unique
+  phone              String?    @unique
+  role               UserRole   @default(VENUE_OWNER)
+  isActive           Boolean    @default(true)
+  method             AuthMethod @default(CREDENTIALS)
+  isVerified         Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  accounts           Account[]
+
+  venues Venue[]
+
+  @@map("users")
+}
+
+// OAuth-аккаунт пользователя. Хранит токены доступа для внешних провайдеров.
+model Account {
+  id String @id @default(uuid())
+
+  type     String
+  provider String
+
+  avatarUrl String?
+
+  refreshToken String? @map("refresh_token")
+  accessToken  String? @map("access_token")
+  expiresAt    Int     @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @map("user_id")
+
+  @@map("accounts")
+}
+
+model Token {
+  id String @id @default(uuid())
+
+  email     String
+  token     String    @unique
+  type      TokenType
+  expiresIn DateTime  @map("expires_in")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("tokens")
+}
+
+enum TokenType {
+  VERIFICATION
+  TWO_FACTOR
+  PASSWORD_RESET
+}
+
+enum AuthMethod {
+  CREDENTIALS
+  GOOGLE
+  GITHUB
+  YANDEX
+  TELEGRAM
+  PHONE
+}
+
+// ============ ЗАВЕДЕНИЯ (VENUES) ============
+
+enum VenueStatus {
+  PENDING_REVIEW // На модерации админом платформы
+  ACTIVE // Проверено и активно работает
+  SUSPENDED // Временно заблокировано (нарушения, долг)
+  REJECTED // Отклонено при модерации
+}
+
+
+
+model Venue {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique // ЧПУ URL для меню: trackup.uz/v/brodway
+  description String?
+  address     String?
+  city        String      @default("Tashkent")
+  logoUrl     String?
+  coverUrl    String?
+  status      VenueStatus @default(PENDING_REVIEW)
+
+  // Экономика заведения (в сумах)
+  commissionPercent Int @default(20) // Процент комиссии платформы (например, 20%)
+  baseTrackPrice    Int @default(30000) // Базовая цена трека (например, 30,000 UZS)
+  prioritySurcharge Int @default(20000) // Доплата за приоритет (например, 20,000 UZS)
+
+  // Операционные настройки
+  isAcceptingOrders Boolean @default(true) // Ручной рубильник приема заказов
+  orderTimeoutMin   Int     @default(7) // Таймаут на ответ DJ в минутах (до автоотклонения)
+  maxQueueLimit     Int     @default(20) // Макс. треков в активной очереди
+
+  // Юридические реквизиты (для договора и выплат)
+  legalName   String? // Название юрлица (ООО / ИП / Самозанятый)
+  inn         String? // ИНН заведения
+  bankAccount String? // Расчетный счет (р/с)
+  mfo         String? // МФО банка
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  djVenues    VenueDj[] // Список DJ, прикрепленных к заведению
+  shifts      DjShift[] // Смены (история и активная смена)
+  orders      Order[]
+  qrCodes     QrCode[]
+  bannedItems VenueBannedItem[] // Стоп-лист треков/артистов
+  payouts     Payout[] // Выплаты доли заведению
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([city])
+  @@map("venues")
+}
+
+// ============ DJ И СМЕНЫ (SHIFTS) ============
+
+model Dj {
+  id          String  @id @default(cuid())
+  name        String // Сценическое имя (DJ Pulse)
+  realName    String? // Реальное имя для договора/связи
+  phone       String? @unique
+  telegramId  String? @unique // Для Telegram WebApp / уведомлений бота
+  pinCodeHash String? // Хеш 4-6 значного PIN-кода для быстрого входа
+  avatarUrl   String?
+  isActive    Boolean @default(true)
+
+  // Связи: DJ может выступать в разных заведениях
+  venues VenueDj[]
+  shifts DjShift[]
+  orders Order[] // Прямой доступ к заказам, обработанным этим DJ
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("djs")
+}
+
+// Many-to-Many связь между DJ и заведениями
+model VenueDj {
+  id        String   @id @default(cuid())
+  venueId   String
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  djId      String
+  dj        Dj       @relation(fields: [djId], references: [id], onDelete: Cascade)
+  isDefault Boolean  @default(false) // Основной резидент заведения
+  createdAt DateTime @default(now())
+
+  @@unique([venueId, djId])
+  @@map("venue_djs")
+}
+
+// Смена: конкретный вечер работы DJ в заведении (маршрутизатор заказов)
+model DjShift {
+  id      String @id @default(cuid())
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  djId    String
+  dj      Dj     @relation(fields: [djId], references: [id], onDelete: Cascade)
+
+  isActive  Boolean   @default(true) // Текущая активная смена
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  // Аналитика смены за вечер
+  totalOrders    Int @default(0)
+  acceptedOrders Int @default(0)
+  totalEarned    Int @default(0) // Сумма в сумах
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([venueId, isActive])
+  @@index([djId])
+  @@map("dj_shifts")
+}
+
+// ============ СТОЛИКИ И QR-КОДЫ ============
+
+model QrCode {
+  id         String   @id @default(cuid())
+  code       String   @unique              // только случайный nanoid, не slug стола
+  tableLabel String                        // "Стол 12", "VIP Lounge", "Барная стойка"
+  zoneId     String?
+  source     String?                       // партия печати или место размещения
+  venueId    String
+  venue      Venue    @relation(fields: [venueId], references: [id])
+  isActive   Boolean  @default(true)
+  scanCount  Int      @default(0)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([venueId])
+  @@map("qr_codes")
+}
+
+// ============ ГОСТИ (АНАНИМНЫЕ ПОЛЬЗОВАТЕЛИ) ============
+
+model Guest {
+  id         String  @id @default(cuid())
+  guestToken String  @unique // Секретный токен из cookie/localStorage гостя
+  phone      String? // Номер телефона (опционально, для связи/чеков)
+  name       String? // Имя гостя (опционально: "Привет от Рустама")
+  deviceInfo String? // User-Agent или fingerprint
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("guests")
+}
+
+// ============ ЗАКАЗЫ (ORDERS) ============
+
+enum OrderStatus {
+  PENDING_PAYMENT // Заказ создан, ожидает подтверждения оплаты в Payme/Click
+  PENDING // Оплачен! Ждет решения DJ (тикает таймаут expiresAt)
+  ACCEPTED // DJ принял заказ в очередь
+  PLAYING // DJ запустил трек прямо сейчас!
+  COMPLETED // Трек отыграл, заказ успешно закрыт
+  REJECTED // DJ отклонил (автоматически запускается возврат)
+  EXPIRED // DJ не ответил вовремя (автоматически запускается возврат)
+  REFUNDED // Деньги возвращены гостю
+}
+
+enum RejectionReason {
+  NOT_IN_FORMAT // Не соответствует формату/жанру заведения
+  ALREADY_PLAYED // Трек уже играл сегодня
+  SHIFT_ENDING // Смена DJ заканчивается
+  EXPLICIT_CONTENT // Нецензурные слова / неподходящий контент
+  TEMPORARY_PAUSE // DJ временно занят / выступление артиста
+  OTHER // Другая причина
+}
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber Int    @default(autoincrement()) // Короткий читаемый номер (№1042)
+  clientToken String @default(cuid()) // Секретный токен для доступа гостя к странице заказа
+
+  // Метаданные трека (полный снапшот из Deezer/Spotify)
+  trackExternalId String? // ID трека в Deezer/Spotify API
+  trackTitle      String
+  trackArtist     String
+  durationMs      Int? // Длительность трека в миллисекундах
+  coverUrl        String? // Ссылка на обложку альбома
+  isrc            String? // Международный стандартный номер аудиозаписи
+
+  // Детали заказа
+  comment         String? // Пожелание от гостя ("Для стола именинника!")
+  isPriority      Boolean          @default(false)
+  rejectionReason RejectionReason?
+  rejectionNote   String? // Дополнительный текстовый комментарий при отклонении
+
+  // Финансы на момент заказа (в сумах)
+  amount Int // Полная сумма заказа (base + priority surcharge)
+  status OrderStatus @default(PENDING_PAYMENT)
+
+  // Связи
+  venueId  String
+  venue    Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  shiftId  String? // Смена, во время которой сделан заказ
+  shift    DjShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  djId     String? // DJ, обрабатывающий заказ
+  dj       Dj?      @relation(fields: [djId], references: [id], onDelete: SetNull)
+  guestId  String
+  guest    Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  qrCodeId String?
+  qrCode   QrCode?  @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+
+  payment    Payment?
+  statusLogs OrderStatusLog[]
+
+  // Таймлайны
+  expiresAt   DateTime // Время, до которого DJ должен принять заказ
+  respondedAt DateTime? // Когда DJ принял или отклонил
+  playedAt    DateTime? // Когда трек включили (PLAYING / COMPLETED)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([venueId, status])
+  @@index([shiftId, status])
+  @@index([djId, status])
+  @@index([guestId])
+  @@index([status, expiresAt])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// Логирование изменений статусов (аудит для споров и аналитики)
+model OrderStatusLog {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  comment    String? // Например, "Таймаут истек", "Отклонено DJ с причиной NOT_IN_FORMAT"
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId])
+  @@map("order_status_logs")
+}
+
+// ============ ПЛАТЕЖИ (PAYMENTS - PAYME & CLICK) ============
+
+enum PaymentProvider {
+  PAYME
+  CLICK
+}
+
+enum PaymentStatus {
+  CREATED // Платеж инициализирован
+  WAITING // Ожидание действия пользователя в шлюзе
+  PAID // Оплата успешно подтверждена
+  REFUND_PENDING // Запрос на возврат отправлен провайдеру
+  REFUNDED // Деньги успешно возвращены
+  FAILED // Ошибка проведения платежа
+}
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  provider PaymentProvider
+  status   PaymentStatus   @default(CREATED)
+
+  // Внешние идентификаторы провайдеров
+  externalId     String? // ID транзакции (Payme transaction id / Click trans_id)
+  idempotencyKey String? @unique // Защита от повторных списаний/дублей
+  providerState  Int? // Payme state (1: Created, 2: Completed, -1 / -2: Cancelled)
+
+  // Финансовая фиксация на момент оплаты (в сумах)
+  amount      Int // Полная сумма
+  platformFee Int // Доля платформы TrackUp
+  venueShare  Int // Доля заведения
+  providerFee Int @default(0) // Комиссия платежного шлюза (1-2%)
+
+  // Данные возврата (Refund)
+  refundReason     String? // Причина возврата
+  refundExternalId String? // ID транзакции возврата у провайдера
+  refundedAmount   Int       @default(0)
+  refundedAt       DateTime?
+
+  rawPayload Json? // Полный лог входящих webhook-запросов (для аудита)
+
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@index([provider, externalId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ============ ВЫПЛАТЫ ЗАВЕДЕНИЯМ (PAYOUTS) ============
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+model Payout {
+  id      String @id @default(cuid())
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  amount      Int // Сумма выплаты заведению (в сумах)
+  status      PayoutStatus @default(PENDING)
+  periodStart DateTime // Начало расчетного периода
+  periodEnd   DateTime // Конец расчетного периода
+
+  invoiceUrl String? // Ссылка на платежное поручение/акт
+  paidAt     DateTime?
+  note       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([venueId])
+  @@map("payouts")
+}
+
+// ============ СТОП-ЛИСТ ЗАВЕДЕНИЯ (BLACK-LIST) ============
+
+enum BannedType {
+  ARTIST
+  TRACK
+  GENRE
+  EXPLICIT_ONLY
+}
+
+model VenueBannedItem {
+  id      String     @id @default(cuid())
+  venueId String
+  venue   Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  type    BannedType
+  value   String // Название артиста, название трека или жанр
+  reason  String? // "Не соответствует формату заведения"
+
+  createdAt DateTime @default(now())
+
+  @@index([venueId])
+  @@map("venue_banned_items")
+}
