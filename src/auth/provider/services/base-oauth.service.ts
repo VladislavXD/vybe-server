@@ -128,7 +128,7 @@ export class BaseOAuthService {
 	/**
 	 * Возвращает URL для перенаправления после успешной аутентификации.
 	 *
-	 * @returns URL для перенаправления.
+	 * @returns URL для перенаправления
 	 */
 	private getRedirectUrl() {
 		return `${this.BASE_URL}/auth/oauth/callback/${this.options.name}`
