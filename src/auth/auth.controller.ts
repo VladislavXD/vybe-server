@@ -130,8 +130,14 @@ export class AuthController {
 
 		await this.authService.extractProfileFromCode(req, provider, code)
 
+		const rawOrigin =
+			this.configService.get<string>('CLIENT_URL') ||
+			this.configService.get<string>('ALLOWED_ORIGIN') ||
+			'http://localhost:3000'
+		const clientUrl = rawOrigin.split(',')[0].trim().replace(/\/+$/, '')
+
 		return res.redirect(
-			`${this.configService.getOrThrow<string>('ALLOWED_ORIGIN')}/en/dashboard/settings`
+			`${clientUrl}/en/dashboard/settings`
 		)
 	}
 

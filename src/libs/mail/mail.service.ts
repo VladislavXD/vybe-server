@@ -31,8 +31,22 @@ export class MailService {
 	 * @param token - Токен подтверждения.
 	 * @returns Промис, который разрешается при успешной отправке.
 	 */
+	private getClientUrl(): string {
+		const raw =
+			this.configService.get<string>('CLIENT_URL') ||
+			this.configService.get<string>('ALLOWED_ORIGIN') ||
+			'http://localhost:3000'
+		return raw.split(',')[0].trim().replace(/\/+$/, '')
+	}
+
+	/**
+	 * Отправляет email для подтверждения адреса электронной почты.
+	 * @param email - Адрес электронной почты получателя.
+	 * @param token - Токен подтверждения.
+	 * @returns Промис, который разрешается при успешной отправке.
+	 */
 	public async sendConfirmationEmail(email: string, token: string) {
-		const domain = this.configService.getOrThrow<string>('ALLOWED_ORIGIN')
+		const domain = this.getClientUrl()
 		const html = await render(ConfirmationTemplate({ domain, token }))
 
 		return this.sendMail(email, 'Подтверждение почты', html)
@@ -45,7 +59,7 @@ export class MailService {
 	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendPasswordResetEmail(email: string, token: string) {
-		const domain = this.configService.getOrThrow<string>('ALLOWED_ORIGIN')
+		const domain = this.getClientUrl()
 		const html = await render(ResetPasswordTemplate({ domain, token }))
 
 		return this.sendMail(email, 'Сброс пароля', html)
