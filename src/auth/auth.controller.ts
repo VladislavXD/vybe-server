@@ -22,7 +22,7 @@ export class AuthController {
   ) {}
 
 
-  @Recaptcha()
+  // @Recaptcha()
   @Post('register')
   @HttpCode(HttpStatus.OK)
   public async register(@Req() req: Request,@Body() dto: RegisterDto){
@@ -30,7 +30,7 @@ export class AuthController {
   }
 
   
-  @Recaptcha()
+  // @Recaptcha()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   public async login(@Req() req: Request,@Body() dto: LoginDto){
@@ -43,7 +43,7 @@ export class AuthController {
    * @param dto - Данные регистрации
    * @returns JWT токен и данные пользователя
    */
-  @Recaptcha()
+  // @Recaptcha()
   @Post('register-jwt')
   @HttpCode(HttpStatus.OK)
   public async registerWithJwt(@Body() dto: RegisterDto){
@@ -56,7 +56,7 @@ export class AuthController {
    * @param dto - Email и пароль пользователя
    * @returns JWT токен и данные пользователя
    */
-  @Recaptcha()
+  //@Recaptcha()
   @Post('login-jwt')
   @HttpCode(HttpStatus.OK)
   public async loginWithJwt(@Body() dto: JwtLoginDto){
@@ -83,7 +83,7 @@ export class AuthController {
    * @param dto - DTO с номером телефона, кодом и опциональным именем
    * @returns Пользователь, JWT токен и сессия
    */
-  @Recaptcha()  
+  //@Recaptcha()
   @Post(['phone/verify-otp', 'phone-otp/verify', 'login-phone'])
   @HttpCode(HttpStatus.OK)
   public async loginWithPhoneOtp(
@@ -98,7 +98,7 @@ export class AuthController {
    * @param dto - DTO с номером телефона, кодом и опциональным именем
    * @returns JWT токен и данные пользователя
    */
-  @Recaptcha()
+  //@Recaptcha()
   @Post(['phone/login-jwt', 'phone-otp/login-jwt'])
   @HttpCode(HttpStatus.OK)
   public async loginWithPhoneOtpJwt(@Body() dto: VerifyPhoneOtpDto) {
