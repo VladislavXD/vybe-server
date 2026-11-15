@@ -1,14 +1,17 @@
 /**
  * Vercel Serverless Entry Point for NestJS.
  *
- * Vercel запускает этот файл как Lambda-функцию.
- * Инициализация приложения кэшируется между warm-запросами.
+ * ВАЖНО: Импортируем из ../dist/ (скомпилировано tsc с emitDecoratorMetadata: true),
+ * а НЕ из ../src/. @vercel/node использует esbuild, который не поддерживает
+ * emitDecoratorMetadata — без него NestJS DI падает при резолве зависимостей.
  *
- * Локальная разработка: используй `src/main.ts` через `npm run start:dev`.
+ * Vercel запускает buildCommand ("npm run build") ДО компиляции api/ файлов,
+ * поэтому dist/ всегда существует к этому моменту.
+ *
+ * Локальная разработка: используй src/main.ts через `npm run start:dev`.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Express } from 'express';
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
@@ -17,16 +20,19 @@ import { createClient } from 'redis';
 import session from 'express-session';
 import { RedisStore } from 'connect-redis';
 
-import { AppModule } from '../src/app.module.js';
-import { ms, type StringValue } from '../src/libs/common/utils/ms.util.js';
-import { parseBoolean } from '../src/libs/common/utils/parse-boolean.util.js';
+// Pre-compiled by tsc (npm run build) with emitDecoratorMetadata: true
+// esbuild только бандлит эти JS-файлы, не перекомпилируя TypeScript
+import { AppModule } from '../dist/app.module.js';
+import { ms } from '../dist/libs/common/utils/ms.util.js';
+import { parseBoolean } from '../dist/libs/common/utils/parse-boolean.util.js';
+
+type ExpressApp = (req: IncomingMessage, res: ServerResponse) => void;
 
 // Singleton — переиспользуем инициализированный Express-адаптер между warm-вызовами
-let cachedApp: Express | null = null;
+let cachedApp: ExpressApp | null = null;
 
-async function buildApp(): Promise<Express> {
+async function buildApp(): Promise<ExpressApp> {
   const app = await NestFactory.create(AppModule, {
-    // Уменьшаем логи в production
     logger:
       process.env.NODE_ENV === 'production'
         ? ['error', 'warn']
@@ -34,19 +40,16 @@ async function buildApp(): Promise<Express> {
   });
 
   const expressApp = app.getHttpAdapter().getInstance() as any;
-
-  // Доверяем прокси Vercel (необходимо для корректного определения HTTPS и IP)
   expressApp.set('trust proxy', 1);
 
   const config = app.get(ConfigService);
 
   // ─── Redis ─────────────────────────────────────────────────────────────────
-  // Подключение Redis с таймаутом 5 секунд — чтобы не зависать на холодном старте
   const redis = createClient({
     url: config.getOrThrow<string>('REDIS_URI'),
     socket: {
       connectTimeout: 5_000,
-      reconnectStrategy: (retries) =>
+      reconnectStrategy: (retries: number) =>
         retries > 2 ? new Error('Redis unavailable') : 500,
     },
   });
@@ -59,10 +62,10 @@ async function buildApp(): Promise<Express> {
     await redis.connect();
   } catch (err) {
     console.error('[Redis] Failed to connect at startup:', (err as Error).message);
-    // Продолжаем запуск — не падаем из-за Redis
+    // Не падаем при недоступном Redis — сессии не будут персистентны
   }
 
-  // ─── CORS ────────────────────────────────────────────────────────────────
+  // ─── CORS ─────────────────────────────────────────────────────────────────
   const isProd =
     process.env.NODE_ENV === 'production' ||
     process.env.VERCEL === '1' ||
@@ -84,23 +87,17 @@ async function buildApp(): Promise<Express> {
       callback: (err: Error | null, origin?: boolean | string) => void,
     ) => {
       if (!requestOrigin) return callback(null, true);
-
       const cleanOrigin = requestOrigin.replace(/\/+$/, '');
 
-      if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*')) {
+      if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*'))
         return callback(null, cleanOrigin);
-      }
 
       const isVercelDomain = /^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(cleanOrigin);
-      const allowVercel =
-        isProd ||
-        process.env.VERCEL === '1' ||
-        allowedOrigins.some((o) => o.includes('vercel.app'));
+      if (isVercelDomain && (isProd || allowedOrigins.some((o) => o.includes('vercel.app'))))
+        return callback(null, cleanOrigin);
 
-      if (isVercelDomain && allowVercel) return callback(null, cleanOrigin);
-
-      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin);
-      if (isLocalhost) return callback(null, cleanOrigin);
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin))
+        return callback(null, cleanOrigin);
 
       callback(new Error(`Origin ${requestOrigin} not allowed by CORS`));
     },
@@ -120,7 +117,7 @@ async function buildApp(): Promise<Express> {
     optionsSuccessStatus: 204,
   });
 
-  // ─── Session ─────────────────────────────────────────────────────────────
+  // ─── Session ───────────────────────────────────────────────────────────────
   const rawSessionDomain = config.get<string>('SESSION_DOMAIN');
   const sessionDomain =
     rawSessionDomain && !rawSessionDomain.includes('vercel.app')
@@ -143,7 +140,7 @@ async function buildApp(): Promise<Express> {
       saveUninitialized: false,
       cookie: {
         ...(sessionDomain ? { domain: sessionDomain } : {}),
-        maxAge: ms(config.get<StringValue>('SESSION_MAX_AGE') || '30d'),
+        maxAge: ms((config.get<string>('SESSION_MAX_AGE') || '30d') as any),
         httpOnly: parseBoolean(config.get<string>('SESSION_HTTP_ONLY') ?? 'true'),
         secure: isSecure,
         sameSite,
@@ -151,18 +148,18 @@ async function buildApp(): Promise<Express> {
       store: new RedisStore({
         client: redis,
         prefix: config.get<string>('SESSION_FOLDER') || 'sessions:',
-        ttl: ms(config.get<StringValue>('SESSION_MAX_AGE') || '30d') / 1000,
+        ttl: ms((config.get<string>('SESSION_MAX_AGE') || '30d') as any) / 1000,
       }),
     }),
   );
 
-  // ─── Validation ───────────────────────────────────────────────────────────
+  // ─── Validation ────────────────────────────────────────────────────────────
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
-  // Инициализируем приложение без listen() — Vercel сам управляет портом
+  // Инициализируем без listen() — Vercel управляет портом сам
   await app.init();
 
-  return expressApp as Express;
+  return expressApp as ExpressApp;
 }
 
 /**
@@ -172,6 +169,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (!cachedApp) {
     cachedApp = await buildApp();
   }
-
-  cachedApp(req as any, res as any);
+  cachedApp(req, res);
 }
