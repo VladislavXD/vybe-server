@@ -1,30 +1,38 @@
-import { MailerOptions } from '@nestjs-modules/mailer'
-import { ConfigService } from '@nestjs/config'
+import { ConfigService } from '@nestjs/config';
 
-import { isDev } from '../libs/common/utils/is-dev.util.js'
+import { isDev } from '../libs/common/utils/is-dev.util.js';
+
+export interface SmtpMailerConfig {
+	transport: {
+		host: string;
+		port: number;
+		secure: boolean;
+		auth: {
+			user: string;
+			pass: string;
+		};
+	};
+	defaults: {
+		from: string;
+	};
+}
 
 /**
- * Конфигурация для почтового сервера.
- *2
- * Эта функция асинхронно извлекает параметры конфигурации из ConfigService
- * и формирует объект конфигурации для Mailer.
- *
- * @param configService - Сервис для работы с конфигурацией приложения.
- * @returns Объект конфигурации для Mailer.
+ * Конфигурация для SMTP почтового сервера.
  */
 export const getMailerConfig = async (
 	configService: ConfigService
-): Promise<MailerOptions> => ({
+): Promise<SmtpMailerConfig> => ({
 	transport: {
-		host: configService.getOrThrow<string>('MAIL_HOST'),
-		port: configService.getOrThrow<number>('MAIL_PORT'),
+		host: configService.get<string>('MAIL_HOST') || 'smtp.gmail.com',
+		port: Number(configService.get('MAIL_PORT')) || 587,
 		secure: !isDev(configService),
 		auth: {
-			user: configService.getOrThrow<string>('MAIL_LOGIN'),
-			pass: configService.getOrThrow<string>('MAIL_PASSWORD')
+			user: configService.get<string>('MAIL_LOGIN') || '',
+			pass: configService.get<string>('MAIL_PASSWORD') || ''
 		}
 	},
 	defaults: {
-		from: `"Mirchan Team" ${configService.getOrThrow<string>('MAIL_LOGIN')}`
+		from: `"TrackUp Team" <${configService.get<string>('MAIL_LOGIN') || 'no-reply@trackup.uz'}>`
 	}
-})
+});

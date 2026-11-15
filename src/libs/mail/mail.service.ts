@@ -1,28 +1,33 @@
-import { MailerService } from '@nestjs-modules/mailer';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 import { ConfirmationTemplate } from './templates/confirmation.template.js';
 import { ResetPasswordTemplate } from './templates/reset-password.template.js';
 import { TwoFactorAuthTemplate } from './templates/two-factor-auth.template.js';
 
 /**
- * Сервис для отправки email-сообщений.
- *
- * Предоставляет методы для отправки различных типов email-сообщений,
- * включая подтверждение почты, сброс пароля и двухфакторную аутентификацию.
+ * Сервис для отправки email-сообщений через Nodemailer.
+ * Полностью автономен, нативен для Node ESM и не имеет проблем несовместимости с Serverless/Vercel.
  */
 @Injectable()
 export class MailService {
-	/**
-	 * Конструктор сервиса почты.
-	 * @param mailerService - Сервис для работы с отправкой email.
-	 * @param configService - Сервис для работы с конфигурацией приложения.
-	 */
-	public constructor(
-		private readonly mailerService: MailerService,
-		private readonly configService: ConfigService
-	) {}
+	private readonly logger = new Logger(MailService.name);
+	private readonly transporter: Transporter;
+
+	public constructor(private readonly configService: ConfigService) {
+		const host = this.configService.get<string>('MAIL_HOST') || 'smtp.gmail.com';
+		const port = Number(this.configService.get<number | string>('MAIL_PORT')) || 587;
+		const user = this.configService.get<string>('MAIL_LOGIN');
+		const pass = this.configService.get<string>('MAIL_PASSWORD');
+
+		this.transporter = nodemailer.createTransport({
+			host,
+			port,
+			secure: port === 465,
+			auth: user && pass ? { user, pass } : undefined,
+		});
+	}
 
 	/**
 	 * Извлекает базовый URL клиентского приложения.
@@ -37,9 +42,6 @@ export class MailService {
 
 	/**
 	 * Отправляет email для подтверждения адреса электронной почты.
-	 * @param email - Адрес электронной почты получателя.
-	 * @param token - Токен подтверждения.
-	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendConfirmationEmail(email: string, token: string) {
 		const domain = this.getClientUrl();
@@ -50,9 +52,6 @@ export class MailService {
 
 	/**
 	 * Отправляет email для сброса пароля.
-	 * @param email - Адрес электронной почты получателя.
-	 * @param token - Токен для сброса пароля.
-	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendPasswordResetEmail(email: string, token: string) {
 		const domain = this.getClientUrl();
@@ -63,9 +62,6 @@ export class MailService {
 
 	/**
 	 * Отправляет email с токеном двухфакторной аутентификации.
-	 * @param email - Адрес электронной почты получателя.
-	 * @param token - Токен двухфакторной аутентификации.
-	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendTwoFactorTokenEmail(email: string, token: string) {
 		const html = TwoFactorAuthTemplate({ token });
@@ -74,17 +70,26 @@ export class MailService {
 	}
 
 	/**
-	 * Отправляет email-сообщение.
-	 * @param email - Адрес электронной почты получателя.
-	 * @param subject - Тема email-сообщения.
-	 * @param html - HTML-содержимое email-сообщения.
-	 * @returns Промис, который разрешается при успешной отправке.
+	 * Отправляет email-сообщение через Nodemailer.
 	 */
-	private sendMail(email: string, subject: string, html: string) {
-		return this.mailerService.sendMail({
-			to: email,
-			subject,
-			html
-		});
+	private async sendMail(email: string, subject: string, html: string) {
+		const fromEmail = this.configService.get<string>('MAIL_LOGIN') || 'no-reply@trackup.uz';
+		const from = `"TrackUp Team" <${fromEmail}>`;
+
+		try {
+			return await this.transporter.sendMail({
+				from,
+				to: email,
+				subject,
+				html,
+			});
+		} catch (error) {
+			this.logger.error(
+				`Не удалось отправить email на ${email}: ${
+					error instanceof Error ? error.message : error
+				}`
+			);
+			throw error;
+		}
 	}
 }
