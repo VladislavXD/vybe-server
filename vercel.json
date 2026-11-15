@@ -1,24 +1,15 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "builds": [
-    {
-      "src": "dist/api/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "dist/**",
-          "prisma/**",
-          "node_modules/.prisma/**",
-          "node_modules/@prisma/**"
-        ]
-      }
+  "outputDirectory": ".",
+  "functions": {
+    "dist/api/index.js": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "dist/**"
     }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/dist/api/index.js"
-    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/dist/api/index.js" }
   ]
 }
