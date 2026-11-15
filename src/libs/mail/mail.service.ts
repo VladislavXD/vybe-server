@@ -1,16 +1,15 @@
-import { MailerService } from '@nestjs-modules/mailer'
-import { Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { render } from '@react-email/components'
+import { MailerService } from '@nestjs-modules/mailer';
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
-import { ConfirmationTemplate } from './templates/confirmation.template.js'
-import { ResetPasswordTemplate } from './templates/reset-password.template.js'
-import { TwoFactorAuthTemplate } from './templates/two-factor-auth.template.js'
+import { ConfirmationTemplate } from './templates/confirmation.template.js';
+import { ResetPasswordTemplate } from './templates/reset-password.template.js';
+import { TwoFactorAuthTemplate } from './templates/two-factor-auth.template.js';
 
 /**
  * Сервис для отправки email-сообщений.
  *
- * Этот сервис предоставляет методы для отправки различных типов email-сообщений,
+ * Предоставляет методы для отправки различных типов email-сообщений,
  * включая подтверждение почты, сброс пароля и двухфакторную аутентификацию.
  */
 @Injectable()
@@ -26,17 +25,14 @@ export class MailService {
 	) {}
 
 	/**
-	 * Отправляет email для подтверждения почты.
-	 * @param email - Адрес электронной почты получателя.
-	 * @param token - Токен подтверждения.
-	 * @returns Промис, который разрешается при успешной отправке.
+	 * Извлекает базовый URL клиентского приложения.
 	 */
 	private getClientUrl(): string {
 		const raw =
 			this.configService.get<string>('CLIENT_URL') ||
 			this.configService.get<string>('ALLOWED_ORIGIN') ||
-			'http://localhost:3000'
-		return raw.split(',')[0].trim().replace(/\/+$/, '')
+			'http://localhost:3000';
+		return raw.split(',')[0].trim().replace(/\/+$/, '');
 	}
 
 	/**
@@ -46,10 +42,10 @@ export class MailService {
 	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendConfirmationEmail(email: string, token: string) {
-		const domain = this.getClientUrl()
-		const html = await render(ConfirmationTemplate({ domain, token }))
+		const domain = this.getClientUrl();
+		const html = ConfirmationTemplate({ domain, token });
 
-		return this.sendMail(email, 'Подтверждение почты', html)
+		return this.sendMail(email, 'Подтверждение почты', html);
 	}
 
 	/**
@@ -59,10 +55,10 @@ export class MailService {
 	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendPasswordResetEmail(email: string, token: string) {
-		const domain = this.getClientUrl()
-		const html = await render(ResetPasswordTemplate({ domain, token }))
+		const domain = this.getClientUrl();
+		const html = ResetPasswordTemplate({ domain, token });
 
-		return this.sendMail(email, 'Сброс пароля', html)
+		return this.sendMail(email, 'Сброс пароля', html);
 	}
 
 	/**
@@ -72,9 +68,9 @@ export class MailService {
 	 * @returns Промис, который разрешается при успешной отправке.
 	 */
 	public async sendTwoFactorTokenEmail(email: string, token: string) {
-		const html = await render(TwoFactorAuthTemplate({ token }))
+		const html = TwoFactorAuthTemplate({ token });
 
-		return this.sendMail(email, 'Подтверждение вашей личности', html)
+		return this.sendMail(email, 'Подтверждение вашей личности', html);
 	}
 
 	/**
@@ -89,6 +85,6 @@ export class MailService {
 			to: email,
 			subject,
 			html
-		})
+		});
 	}
 }
