@@ -15,7 +15,7 @@
     "sourceMap": true,
     "jsx": "react-jsx",
     "outDir": "./dist",
-    "incremental": true,
+    "rootDir": "./src",
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false,
@@ -24,5 +24,6 @@
       "node"
     ],
     "resolveJsonModule": true
-  }
+  },
+  "include": ["src/**/*"]
 }
