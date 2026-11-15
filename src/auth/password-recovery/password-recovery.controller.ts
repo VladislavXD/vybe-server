@@ -6,7 +6,7 @@ import {
 	Param,
 	Post
 } from '@nestjs/common'
-import { Recaptcha } from '@nestlab/google-recaptcha'
+import { Recaptcha } from '../decorators/turnstile.decorator.js'
 
 import { NewPasswordDto } from './dto/new-password.dto.js'
 import { ResetPasswordDto } from './dto/reset-password.dto.js'

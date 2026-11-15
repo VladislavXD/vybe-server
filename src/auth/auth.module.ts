@@ -3,9 +3,7 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { UserService } from '../user/user.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
-import { GoogleRecaptchaModule } from '@nestlab/google-recaptcha';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { getRecaptchaConfig } from '../config/recaptcha.config.js';
 import { ProviderModule } from './provider/provider.module.js';
 import { getProvidersConfig } from '../config/providers.config.js';
 import { EmailConfirmationModule } from './email-confirmation/email-confirmation.module.js';
@@ -17,11 +15,10 @@ import { getJwtConfig } from '../config/jwt.config.js';
 import { MinioModule } from '../minio/minio.module.js';
 import { AUTH_SERVICE } from './auth.constants.js';
 import { PhoneOtpService } from './phone/phone-otp.service.js';
-
+import { TurnstileGuard } from './guards/turnstile.guard.js';
 
 @Module({
-  imports: 
-  [
+  imports: [
     ProviderModule.registerAsync({
       imports: [ConfigModule],
       useFactory: getProvidersConfig,
@@ -36,11 +33,6 @@ import { PhoneOtpService } from './phone/phone-otp.service.js';
 
     PrismaModule, 
     MinioModule,
-    GoogleRecaptchaModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: getRecaptchaConfig,
-      inject: [ConfigService]
-    }),
     forwardRef(() => EmailConfirmationModule),
     PasswordRecoveryModule
   ],
@@ -51,8 +43,9 @@ import { PhoneOtpService } from './phone/phone-otp.service.js';
     UserService,
     MailService,
     TwoFactorAuthService,
-    PhoneOtpService
+    PhoneOtpService,
+    TurnstileGuard
   ],
-  exports: [AuthService, AUTH_SERVICE, JwtModule, PhoneOtpService]
+  exports: [AuthService, AUTH_SERVICE, JwtModule, PhoneOtpService, TurnstileGuard]
 })
 export class AuthModule {}
