@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { AuthMethod } from '@prisma/client';
+import { AuthMethod, VenueStatus } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { hash, verify } from 'argon2';
 import { MinioService } from '../minio/minio.service.js';
@@ -78,7 +79,8 @@ export class UserService {
 		method: AuthMethod,
 		isVerified: boolean,
 		avatarUrl?: string,
-		phone?: string
+		phone?: string,
+		venueName?: string
 	) {
 		let finalAvatarUrl: string | null = null;
 
@@ -100,6 +102,14 @@ export class UserService {
 			finalAvatarUrl = uploadResult.secure_url;
 		}
 
+		// Автоматически создаем первое заведение для нового пользователя (владельца)
+		const resolvedVenueName =
+			venueName?.trim() ||
+			(name?.trim() ? `Заведение ${name.trim()}` : 'Мое заведение');
+		const cleanSlug = this.slugify(resolvedVenueName);
+		const randomSuffix = randomBytes(2).toString('hex');
+		const defaultSlug = `${cleanSlug}-${randomSuffix}`;
+
 		const user = await this.prismaService.user.create({
 			data: {
 				email: email || null,
@@ -109,13 +119,44 @@ export class UserService {
 				method,
 				isVerified,
 				avatarUrl: finalAvatarUrl,
+				venues: {
+					create: {
+						name: resolvedVenueName,
+						slug: defaultSlug,
+						city: 'Tashkent',
+						status: VenueStatus.ACTIVE, // Сразу готово к работе в MVP
+						commissionPercent: 15,
+						baseTrackPrice: 30000,
+						prioritySurcharge: 20000,
+						orderTimeoutMin: 3,
+						maxQueueLimit: 20
+					}
+				}
 			},
 			include: {
 				accounts: true,
+				venues: true
 			}
 		});
 
 		return user;
+	}
+
+	/**
+	 * Преобразование текста в URL slug.
+	 */
+	private slugify(text: string): string {
+		return (
+			text
+				.toString()
+				.toLowerCase()
+				.trim()
+				.replace(/\s+/g, '-')
+				.replace(/[^\w\-]+/g, '')
+				.replace(/\-\-+/g, '-')
+				.replace(/^-+/, '')
+				.replace(/-+$/, '') || 'venue'
+		);
 	}
 
 	public async update(id: string, dto: UpdateUserDto) {

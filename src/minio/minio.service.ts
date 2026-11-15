@@ -19,37 +19,37 @@ export class MinioService implements OnModuleInit {
 
   constructor(private readonly configService: ConfigService) {
     this.endpoint =
-      this.configService.get<string>('MINIO_ENDPOINT') ||
+      this.configService.getOrThrow<string>('MINIO_ENDPOINT') ||
       process.env.MINIO_ENDPOINT ||
       'http://localhost:9000';
 
     this.publicUrl =
-      this.configService.get<string>('MINIO_PUBLIC_URL') ||
+      this.configService.getOrThrow<string>('MINIO_PUBLIC_URL') ||
       process.env.MINIO_PUBLIC_URL ||
       this.endpoint;
 
     this.bucket =
-      this.configService.get<string>('MINIO_BUCKET_NAME') ||
+      this.configService.getOrThrow<string>('MINIO_BUCKET_NAME') ||
       process.env.MINIO_BUCKET_NAME ||
       'trackup-storage';
 
     const accessKeyId =
-      this.configService.get<string>('MINIO_ROOT_USER') ||
-      this.configService.get<string>('MINIO_ACCESS_KEY') ||
+      this.configService.getOrThrow<string>('MINIO_ROOT_USER') ||
+      this.configService.getOrThrow<string>('MINIO_ACCESS_KEY') ||
       process.env.MINIO_ROOT_USER ||
       process.env.MINIO_ACCESS_KEY ||
       'trackup';
 
     const secretAccessKey =
-      this.configService.get<string>('MINIO_ROOT_PASSWORD') ||
-      this.configService.get<string>('MINIO_SECRET_KEY') ||
+      this.configService.getOrThrow<string>('MINIO_ROOT_PASSWORD') ||
+      this.configService.getOrThrow<string>('MINIO_SECRET_KEY') ||
       process.env.MINIO_ROOT_PASSWORD ||
       process.env.MINIO_SECRET_KEY ||
       'K3tgD0U;RbCj%Lfvu';
 
     this.s3Client = new S3Client({
       endpoint: this.endpoint,
-      region: this.configService.get<string>('MINIO_REGION') || 'us-east-1',
+      region: this.configService.getOrThrow<string>('MINIO_REGION') || 'us-east-1',
       credentials: {
         accessKeyId,
         secretAccessKey,

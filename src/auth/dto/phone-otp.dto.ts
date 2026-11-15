@@ -23,3 +23,5 @@ export class VerifyPhoneOtpDto extends RequestPhoneOtpDto {
 	@IsString({ message: 'Имя должно быть строкой' })
 	name?: string;
 }
+
+

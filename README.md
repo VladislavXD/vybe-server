@@ -21,11 +21,45 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+# Trackup Server (Backend API)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Модульный монолит на NestJS, Prisma ORM, PostgreSQL и Redis для платформы **Trackup** (модули `Music`, `Food`, `Reviews`).
+
+---
+
+## Модуль QR-кодов (`QrcodeModule`)
+
+Модуль управления постоянными QR-кодами и NFC-метками для столов, барных стоек и зон заведений.
+
+### Архитектура и поток сканирования
+1. **Физический носитель:** На столе размещается тейбл-тент / наклейка / NFC-шайба с коротким уникальным постоянным URL:  
+   `https://app.trackup.uz/q/<code>` (где `<code>` — 8-символьный nanoid).
+2. **Публичный шлюз (`QRedirectController`):**  
+   - `GET /q/:code` — обрабатывает запрос сканирования.
+   - Проверяет активность QR-кода (`isActive`).
+   - Инкрементирует счетчик аналитики `scanCount` и обновляет дату `lastScannedAt`.
+   - Выполняет HTTP 302 редирект в браузер гостя на соответствующий начальный экран по `QrCodeType`:
+     - `MUSIC` → `${CLIENT_URL}/g/${qr.id}?type=music`
+     - `FOOD` → `${CLIENT_URL}/g/${qr.id}?type=food`
+     - `REVIEWS` → `${CLIENT_URL}/g/${qr.id}?type=review`
+3. **API Резолва для клиентских приложений:**  
+   - `GET /qrcode/resolve/:code` — возвращает JSON с метаданными заведения, стола и `redirectUrl` без принудительного HTTP-редиректа.
+
+### Управление QR-кодами (Администраторы и Владельцы заведений)
+Все операции защищены ролевым гардом `@Authorization(UserRole.VENUE_OWNER, UserRole.ADMIN)`:
+- `POST /qrcode` — создание единичного QR-кода стола.
+- `POST /qrcode/batch` — пакетная генерация диапазона столов (например, столы 1–30 с префиксом «Стол »).
+- `GET /qrcode/venue/:venueId` — получение списка всех QR-кодов заведения с фильтрацией по `type` (`MUSIC`, `FOOD`, `REVIEWS`), статусу `isActive` и текстовому поиску `search`.
+- `GET /qrcode/:id` — получение детальной информации по QR-коду.
+- `PATCH /qrcode/:id` — обновление параметров QR (метки стола, зоны, активности и **типа назначения без перепечатки полиграфии**).
+- `DELETE /qrcode/:id` — безопасное удаление или мягкая деактивация (при наличии заказов).
+- `GET /qrcode/:id/image?format=png|svg&size=600&download=true` — генерация высококачественного QR-изображения (PNG / векторный SVG для типографии).
+- `GET /qrcode/:id/preview` — получение Base64 Data URL для рендера в веб-панели заведения.
+
+---
 
 ## Project setup
+
 
 ```bash
 $ npm install

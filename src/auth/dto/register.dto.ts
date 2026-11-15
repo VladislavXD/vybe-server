@@ -1,6 +1,7 @@
 import {
 	IsEmail,
 	IsNotEmpty,
+	IsOptional,
 	IsString,
 	MinLength,
 	Validate
@@ -18,6 +19,14 @@ export class RegisterDto {
 	@IsString({ message: 'Имя должно быть строкой.' })
 	@IsNotEmpty({ message: 'Имя обязательно для заполнения.' })
 	name: string
+
+	/**
+	 * Название заведения (опционально, создается автоматически).
+	 * @example "Brodway Bar"
+	 */
+	@IsString({ message: 'Название заведения должно быть строкой.' })
+	@IsOptional()
+	venueName?: string
 
 	/**
 	 * Email пользователя.

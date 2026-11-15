@@ -140,8 +140,8 @@ export class PhoneOtpService {
 			this.logger.log(`[SMS OTP DEV] Номер: ${phone}, Код: ${code}`);
 		}
 
-		const email = this.configService.get<string>('ESKIZ_EMAIL');
-		const password = this.configService.get<string>('ESKIZ_PASSWORD');
+		const email = this.configService.getOrThrow<string>('ESKIZ_EMAIL');
+		const password = this.configService.getOrThrow<string>('ESKIZ_PASSWORD');
 
 		// Если реквизиты Eskiz не настроены в .env, логируем предупреждение без падения приложения
 		if (!email || !password) {
@@ -153,8 +153,8 @@ export class PhoneOtpService {
 
 		// Eskiz принимает номер без знака плюса (например: 998901234567)
 		const cleanPhone = phone.replace('+', '');
-		const from = this.configService.get<string>('ESKIZ_FROM') || '4546';
-		const isTestMode = this.configService.get<string>('ESKIZ_TEST_MODE') === 'true';
+		const from = this.configService.getOrThrow<string>('ESKIZ_FROM') || '4546';
+		const isTestMode = this.configService.getOrThrow<string>('ESKIZ_TEST_MODE') === 'true';
 
 		// В тестовом статусе Eskiz разрешает отправлять ТОЛЬКО фиксированные тексты
 		const message = isTestMode

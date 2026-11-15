@@ -11,6 +11,8 @@ import { DjsModule } from './djs/djs.module.js';
 import { TracksModule } from './tracks/tracks.module.js';
 import { MinioModule } from './minio/minio.module.js';
 import { RedisModule } from './redis/redis.module.js';
+import { QrcodeModule } from './qrcode/qrcode.module.js';
+import { VenuesModule } from './venues/venues.module.js';
 
 @Module({
   imports: [
@@ -25,7 +27,9 @@ import { RedisModule } from './redis/redis.module.js';
     OrdersModule,
     DjsModule,
     TracksModule,
-    RedisModule
+    RedisModule,
+    VenuesModule,
+    QrcodeModule
   ],
   controllers: [AppController],
   providers: [AppService],

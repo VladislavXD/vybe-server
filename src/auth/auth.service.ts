@@ -64,7 +64,9 @@ export class AuthService {
 			dto.name,
 			AuthMethod.CREDENTIALS,
 			false,
-			avatarUrl
+			avatarUrl,
+			undefined,
+			dto.venueName
 		)
 		if (newUser.email) {
 			await this.emailConfirmationService.sendVerificationToken(newUser.email)
@@ -114,7 +116,7 @@ export class AuthService {
 
 		return this.saveSession(req, user)
 	}
-
+	
 	public async logout(req: Request, res: Response):Promise<void>{
 		return new Promise((resolve, reject)=> {
 			req.session.destroy(err=> {
@@ -263,7 +265,9 @@ export class AuthService {
 			dto.name,
 			AuthMethod.CREDENTIALS,
 			false,
-			avatarUrl
+			avatarUrl,
+			undefined,
+			dto.venueName
 		)
 
 		if (newUser.email) {
@@ -362,6 +366,7 @@ export class AuthService {
 	public async requestPhoneOtp(dto: RequestPhoneOtpDto) {
 		return this.phoneOtpService.requestOtp(dto.phone);
 	}
+	
 
 	/**
 	 * Авторизация/Регистрация по номеру телефона и OTP коду (веб-сессия + токен).

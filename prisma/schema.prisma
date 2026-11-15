@@ -183,11 +183,12 @@ model VenueDj {
 
 // Смена: конкретный вечер работы DJ в заведении (маршрутизатор заказов)
 model DjShift {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   venueId String
-  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  djId    String
-  dj      Dj     @relation(fields: [djId], references: [id], onDelete: Cascade)
+  venue   Venue   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  djId    String?
+  dj      Dj?     @relation(fields: [djId], references: [id], onDelete: SetNull)
+  djName  String? @default("Resident DJ") // В MVP смена ведется владельцем под именем DJ
 
   isActive  Boolean   @default(true) // Текущая активная смена
   startedAt DateTime  @default(now())
@@ -210,16 +211,24 @@ model DjShift {
 
 // ============ СТОЛИКИ И QR-КОДЫ ============
 
+enum QrCodeType {
+  MUSIC
+  FOOD
+  REVIEWS
+}
+
 model QrCode {
-  id         String   @id @default(cuid())
-  code       String   @unique              // только случайный nanoid, не slug стола
-  tableLabel String                        // "Стол 12", "VIP Lounge", "Барная стойка"
-  zoneId     String?
-  source     String?                       // партия печати или место размещения
-  venueId    String
-  venue      Venue    @relation(fields: [venueId], references: [id])
-  isActive   Boolean  @default(true)
-  scanCount  Int      @default(0)
+  id            String      @id @default(cuid())
+  code          String      @unique              // только случайный nanoid, не slug стола
+  tableLabel    String                           // "Стол 12", "VIP Lounge", "Барная стойка"
+  type          QrCodeType  @default(MUSIC)      // Назначение QR: MUSIC (диджей), FOOD (меню), REVIEWS (отзывы)
+  zoneId        String?
+  source        String?                          // партия печати или место размещения (table_tent, sticker, nfc)
+  venueId       String
+  venue         Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  isActive      Boolean     @default(true)
+  scanCount     Int         @default(0)
+  lastScannedAt DateTime?
 
   orders Order[]
 
@@ -227,6 +236,7 @@ model QrCode {
   updatedAt DateTime @updatedAt
 
   @@index([venueId])
+  @@index([type])
   @@map("qr_codes")
 }
 
