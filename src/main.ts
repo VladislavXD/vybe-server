@@ -15,15 +15,64 @@ async function bootstrap() {
   expressApp.set('trust proxy', 1);
 
   const config = app.get(ConfigService);
-  const redis = createClient({
-    url: config.getOrThrow<string>('REDIS_URI'),
-  });
-  await redis.connect();
 
   const isProd =
     process.env.NODE_ENV === 'production' ||
     process.env.VERCEL === '1' ||
     process.env.VERCEL === 'true';
+
+  // Безопасное подключение к Redis для сессий:
+  // Если Redis недоступен или указывает на localhost на Vercel — сессии переключаются на MemoryStore
+  // без зависания процесса и таймаутов Vercel.
+  let sessionStore: any = undefined;
+  const rawRedisUri = config.get<string>('REDIS_URI');
+  const isLocalRedis =
+    !rawRedisUri ||
+    rawRedisUri.includes('localhost') ||
+    rawRedisUri.includes('127.0.0.1');
+
+  if (rawRedisUri && (!isProd || !isLocalRedis)) {
+    try {
+      const redis = createClient({
+        url: rawRedisUri,
+        socket: {
+          connectTimeout: 2000,
+          reconnectStrategy: (retries) => {
+            if (retries > 1) return new Error('Redis connection aborted');
+            return 300;
+          },
+        },
+      });
+
+      redis.on('error', (err) => {
+        console.warn('⚠️ Redis Client Warning:', err.message);
+      });
+
+      // Жесткий таймаут подключения 1500мс, чтобы сервер никогда не висел на Vercel
+      await Promise.race([
+        redis.connect(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Redis connection timeout (1500ms)')), 1500)
+        ),
+      ]);
+
+      sessionStore = new RedisStore({
+        client: redis,
+        prefix: config.get<string>('SESSION_FOLDER') || 'sessions:',
+        ttl: ms(config.get<StringValue>('SESSION_MAX_AGE') || '30d') / 1000,
+      });
+
+      console.log('✅ Redis session store connected.');
+    } catch (err: any) {
+      console.warn(
+        `⚠️ Redis недоступен (${err?.message || err}). Сессии временно переведены на MemoryStore.`
+      );
+    }
+  } else {
+    console.log(
+      'ℹ️ Redis не настроен или указывает на localhost в production. Используется MemoryStore для сессий.'
+    );
+  }
 
   // Разбор разрешенных доменов для CORS
   const rawAllowedOrigins =
@@ -70,11 +119,7 @@ async function bootstrap() {
         secure: isSecure,
         sameSite,
       },
-      store: new RedisStore({
-        client: redis,
-        prefix: config.get<string>('SESSION_FOLDER') || 'sessions:',
-        ttl: ms(config.get<StringValue>('SESSION_MAX_AGE') || '30d') / 1000,
-      }),
+      ...(sessionStore ? { store: sessionStore } : {}),
     }),
   );
 
