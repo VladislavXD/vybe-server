@@ -1,58 +1,36 @@
-import { Provider } from '@nestjs/common';
-import Redis from 'ioredis';
+import { Provider } from '@nestjs/common'
+import Redis from 'ioredis'
 
-export const REDIS = 'REDIS';
+export const REDIS = 'REDIS'
 
 /**
- * Провайдер для Redis (ioredis).
- * Поддерживает REDIS_URI (например Upstash / Aiven / Redis Cloud),
- * а также не блокирует запуск приложения на Vercel (lazyConnect).
+ * Провайдер для Redis.
+ * 
+ * Создаёт подключение к Redis с использованием переменных окружения.
  */
 export const RedisProvider: Provider = {
 	provide: REDIS,
 	useFactory: () => {
-		const redisUri = process.env.REDIS_URI;
-		const isProd =
-			process.env.NODE_ENV === 'production' ||
-			process.env.VERCEL === '1' ||
-			process.env.VERCEL === 'true';
-
-		const commonOptions: any = {
-			connectTimeout: 2000,
-			maxRetriesPerRequest: 1,
-			enableOfflineQueue: false,
-			lazyConnect: true,
-			retryStrategy: (times: number) => {
-				if (times > 2) return null;
-				return 300;
+		const redis = new Redis({
+			host: process.env.REDIS_HOST || 'localhost',
+			port: parseInt(process.env.REDIS_PORT || '6379', 10),
+			password: process.env.REDIS_PASSWORD || undefined,
+			db: parseInt(process.env.REDIS_DB || '0', 10),
+			retryStrategy: (times) => {
+				const delay = Math.min(times * 50, 2000)
+				return delay
 			},
-		};
-
-		const isLocal =
-			!redisUri || redisUri.includes('localhost') || redisUri.includes('127.0.0.1');
-
-		let redis: Redis;
-
-		if (redisUri && (!isProd || !isLocal)) {
-			redis = new Redis(redisUri, commonOptions);
-		} else {
-			redis = new Redis({
-				host: process.env.REDIS_HOST || 'localhost',
-				port: parseInt(process.env.REDIS_PORT || '6379', 10),
-				password: process.env.REDIS_PASSWORD || undefined,
-				db: parseInt(process.env.REDIS_DB || '0', 10),
-				...commonOptions,
-			});
-		}
+			maxRetriesPerRequest: 3,
+		})
 
 		redis.on('connect', () => {
-			console.log('✅ ioredis connected successfully');
-		});
+			console.log('✅ Redis connected successfully')
+		})
 
 		redis.on('error', (err) => {
-			console.warn('⚠️ ioredis connection warning:', err.message);
-		});
+			console.error('❌ Redis connection error:', err)
+		})
 
-		return redis;
-	},
-};
+		return redis
+	}
+}
