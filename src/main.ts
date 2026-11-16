@@ -24,7 +24,14 @@ async function bootstrap() {
     process.env.RENDER === 'true' ||
     config.get<string>('NODE_ENV') === 'production';
 
-  const sessionDomain = config.get<string>('SESSION_DOMAIN');
+  const rawSessionDomain = config.get<string>('SESSION_DOMAIN');
+  const sessionDomain =
+    rawSessionDomain &&
+    !rawSessionDomain.includes('onrender.com') &&
+    !rawSessionDomain.includes('vercel.app')
+      ? rawSessionDomain.trim()
+      : undefined;
+
   const rawSameSite = config.get<string>('SESSION_SAME_SITE');
   const sameSite = (rawSameSite?.toLowerCase() === 'none' || isProd ? 'none' : (rawSameSite || 'lax')) as 'lax' | 'strict' | 'none';
   const isSecure = sameSite === 'none' ? true : parseBoolean(config.get<string>('SESSION_SECURE') ?? (isProd ? 'true' : 'false'));
@@ -36,9 +43,7 @@ async function bootstrap() {
       resave: true,
       saveUninitialized: false,
       cookie: {
-        ...(sessionDomain && sessionDomain.trim()
-          ? { domain: sessionDomain }
-          : {}),
+        ...(sessionDomain ? { domain: sessionDomain } : {}),
         maxAge: ms(config.getOrThrow<StringValue>('SESSION_MAX_AGE')),
         httpOnly: parseBoolean(config.getOrThrow<string>('SESSION_HTTP_ONLY')),
         secure: isSecure,
