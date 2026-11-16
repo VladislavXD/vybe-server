@@ -19,7 +19,16 @@ async function bootstrap() {
     url: config.getOrThrow<string>('REDIS_URI'),
   });
   await redis.connect();
+  const isProd =
+    process.env.NODE_ENV === 'production' ||
+    process.env.RENDER === 'true' ||
+    config.get<string>('NODE_ENV') === 'production';
+
   const sessionDomain = config.get<string>('SESSION_DOMAIN');
+  const rawSameSite = config.get<string>('SESSION_SAME_SITE');
+  const sameSite = (rawSameSite?.toLowerCase() === 'none' || isProd ? 'none' : (rawSameSite || 'lax')) as 'lax' | 'strict' | 'none';
+  const isSecure = sameSite === 'none' ? true : parseBoolean(config.get<string>('SESSION_SECURE') ?? (isProd ? 'true' : 'false'));
+
   app.use(
     session({
       secret: config.getOrThrow<string>('SESSION_SECRET'),
@@ -32,8 +41,8 @@ async function bootstrap() {
           : {}),
         maxAge: ms(config.getOrThrow<StringValue>('SESSION_MAX_AGE')),
         httpOnly: parseBoolean(config.getOrThrow<string>('SESSION_HTTP_ONLY')),
-        secure: parseBoolean(config.getOrThrow<string>('SESSION_SECURE')),
-        sameSite: config.getOrThrow<'lax' | 'strict' | 'none' | boolean>(   'SESSION_SAME_SITE'),
+        secure: isSecure,
+        sameSite: sameSite,
       },
       store: new RedisStore({
         client: redis,
