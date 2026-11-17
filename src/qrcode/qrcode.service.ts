@@ -64,8 +64,35 @@ export class QrcodeService {
 			throw new NotFoundException(`QR-код с кодом "${code}" не найден.`);
 		}
 
+		const clientOrigin = this.getClientBaseUrl();
+		const serviceType: QrServiceType = toServiceType(qrCode.type);
+		const tableNumber = extractTableNumber(qrCode.tableLabel);
+
+		// Если QR-код временно деактивирован заведением — перенаправляем на красивый экран выключенного столика
 		if (!qrCode.isActive) {
-			throw new BadRequestException('Данный QR-код временно деактивирован заведением.');
+			const venueName = qrCode.venue?.name || '';
+			const redirectUrl = `${clientOrigin}/g/${qrCode.id}?status=disabled&type=${serviceType}&venue=${encodeURIComponent(venueName)}&table=${encodeURIComponent(qrCode.tableLabel)}&code=${qrCode.code}`;
+
+			return {
+				redirectUrl,
+				serviceType,
+				isActive: false,
+				qrCode: {
+					id: qrCode.id,
+					code: qrCode.code,
+					tableLabel: qrCode.tableLabel,
+					tableNumber,
+					type: qrCode.type,
+					serviceType,
+					zoneId: qrCode.zoneId,
+					source: qrCode.source,
+					scanCount: qrCode.scanCount,
+					lastScannedAt: qrCode.lastScannedAt,
+					isActive: false
+				},
+				venue: qrCode.venue,
+				message: 'Данный QR-код временно деактивирован заведением.'
+			};
 		}
 
 		// Асинхронно обновляем аналитику сканирования (scanCount, lastScannedAt)
@@ -77,12 +104,8 @@ export class QrcodeService {
 			}
 		});
 
-		const clientOrigin = this.getClientBaseUrl();
-		const serviceType: QrServiceType = toServiceType(qrCode.type);
-		const tableNumber = extractTableNumber(qrCode.tableLabel);
-
 		// Формируем редирект на гостевую страницу: /g/[id]?type=music|food|review
-		const redirectUrl = `${clientOrigin}/g/${qrCode.id}?type=${serviceType}`;
+		const redirectUrl = `${clientOrigin}/g/${qrCode.id}?type=${serviceType}&venue=${encodeURIComponent(qrCode.venue?.name || '')}&table=${encodeURIComponent(qrCode.tableLabel)}&code=${qrCode.code}`;
 
 		return {
 			redirectUrl,
