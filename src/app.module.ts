@@ -13,6 +13,7 @@ import { MinioModule } from './minio/minio.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { QrcodeModule } from './qrcode/qrcode.module.js';
 import { VenuesModule } from './venues/venues.module.js';
+import { MusicModule } from './music/music.module.js';
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { VenuesModule } from './venues/venues.module.js';
     TracksModule,
     RedisModule,
     VenuesModule,
-    QrcodeModule
+    QrcodeModule,
+    MusicModule
   ],
   controllers: [AppController],
   providers: [AppService],
